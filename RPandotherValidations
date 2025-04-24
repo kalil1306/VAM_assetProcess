@@ -1,0 +1,159 @@
+step 1:
+Creating a new record producer and ask ITIL user to submit the template in the excel format using the variable
+producer creation and producer script to fetch the attachment and pass it through the datasource and run it by tMap to store the data
+from the import set table to target table
+
+producer script:
+----------------------------------------------
+
+(function executeRule(current, gForm, gUser, gSNC) {
+
+  // STEP 1: Get the uploaded attachment
+  var attGR = new GlideRecord('sys_attachment');
+  attGR.addQuery('table_sys_id', current.sys_id);
+  attGR.orderByDesc('sys_created_on');
+  attGR.query();
+
+  if (!attGR.next()) {
+    gs.addInfoMessage("No attachment found. Please upload a valid Excel file.");
+    current.setAbortAction(true);
+    return;
+  }
+
+  // STEP 2: Validate Excel
+  try {
+    var sa = new GlideSysAttachment();
+    var inputStream = sa.getContentStream(attGR.sys_id);
+    var parser = new sn_impex.ExcelParser();
+    var workbook = parser.parse(inputStream);
+    var sheet = workbook.getSheet(0);
+
+    if (!sheet || sheet.getRowCount() <= 1) {
+      gs.addInfoMessage("The Excel file is empty or only has headers.");
+      current.setAbortAction(true);
+      return;
+    }
+  } catch (e) {
+    gs.addInfoMessage("Excel parsing failed. Please check your template.");
+    current.setAbortAction(true);
+    return;
+  }
+
+  // STEP 3: Import to import set
+  var importLog = new GlideImportLog();
+  importLog.setSource("TestDS"); // your Data Source name
+  importLog.setImportSetTableName("u_asset_upload_staging");
+  importLog.setAttachment(attGR);
+  var importSetRunId = importLog.runImport();
+
+  // STEP 4: Check if rows imported
+  var importSetGR = new GlideRecord('u_asset_upload_staging');
+  importSetGR.addQuery('import_set', importSetRunId);
+  importSetGR.query();
+
+  if (!importSetGR.hasNext()) {
+    gs.addInfoMessage("Upload succeeded but no data rows were found.");
+    current.setAbortAction(true);
+    return;
+  }
+
+  // STEP 5: Transform to alm_asset
+  var transformer = new GlideImportSetTransformer();
+  transformer.setImportSetRun(importSetRunId);
+  transformer.setTransformMap("Asset Bulk Upload Transform");
+  transformer.transformAllMaps();
+
+  // STEP 6: Success message
+  gs.addInfoMessage("Your file is successfully processed and asset records are being created.");
+
+  // STEP 7: Prevent RP target record creation
+  current.setAbortAction(true);
+
+  // STEP 8: Redirect to RP URL
+  gs.getSession().putProperty('redirect_to_rp', 'true');
+
+})(current, gForm, gUser, gSNC);
+
+
+-----------------------------------------------------------------------------------------
+
+step 2:
+onsubmit client script: when the user submit the form if the attachment is empty then stop user and get alert message 
+
+function onSubmit() {
+  var attachmentId = g_form.getValue('IO:excel_upload');
+
+  if (!attachmentId) {
+    alert("Please upload an Excel file.");
+    return false;
+  }
+
+  var ga = new GlideAjax('ValidateExcelAttachment');
+  ga.addParam('sysparm_name', 'checkExcelData');
+  ga.addParam('sysparm_attachment_id', attachmentId);
+  ga.setAsync(false); // sync block
+  var result = ga.getXMLAnswer();
+
+  if (result === 'invalid') {
+    alert("The Excel file is empty or malformed. Please upload a valid file with at least one row of data.");
+    return false;
+  }
+
+  return true;
+}
+
+-----------------------------------------------------------------------------------------
+
+step 3: do an backend validation from the script include using glidesysattachment
+
+var ValidateExcelAttachment = Class.create();
+ValidateExcelAttachment.prototype = Object.extendsObject(AbstractAjaxProcessor, {
+  checkExcelData: function() {
+    var attachmentId = this.getParameter('sysparm_attachment_id');
+    if (!attachmentId) return 'invalid';
+
+    try {
+      var sa = new GlideSysAttachment();
+      var stream = sa.getContentStream(attachmentId);
+
+      var parser = new sn_impex.ExcelParser();
+      var workbook = parser.parse(stream);
+      var sheet = workbook.getSheet(0);
+
+      if (!sheet || sheet.getRowCount() <= 1) {
+        return 'invalid'; // only headers
+      }
+
+      return 'valid';
+    } catch (e) {
+      return 'invalid';
+    }
+  }
+});
+
+-----------------------------------------------------------------------------------------
+
+step 4: UI Script for Redirect (Optional but Recommended)
+
+To automatically redirect back to the Record Producer form after submission, use this workaround:
+
+catalog client script: onload
+
+script: 
+function onLoad() {
+  var redirect = g_user.getPreference('redirect_to_rp');
+
+  if (redirect == 'true') {
+    // Clear flag
+    GlideAjax.setPreference('redirect_to_rp', '');
+
+    // Redirect to Record Producer catalog URL
+    window.location.href = "/sp?id=sc_cat_item&sys_id=YOUR_RECORD_PRODUCER_SYS_ID";
+  }
+}
+
+Replace YOUR_RECORD_PRODUCER_SYS_ID with your actual Record Producer’s sys_id.
+
+-----------------------------------------------------------------------------------------
+
+
