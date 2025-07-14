@@ -1,0 +1,14 @@
+Use case:
+
+When the developer completes the update set meaning moving states to complete automatically a related link needs to be visible ‘prep to promote to TEST’ this related link needs to be visible only for me just now when the user clicks the related link, it should send the completed update set as a xml file to the TEST environment and that file needs to inserted in the Retrieved update set so that the developer’s update set movement will be automated and it’s make easy and not to miss or insert any wrong update set this is the POC I want to do and I would like to do this in flow designer
+
+1. When the update set state is complete a new related link need to visible called ‘Prep to promote to TEST’
+2. ‘Prep to promote to TEST’ will be visible only for me later once it executed successfully then we can make visible for the user who has role as admin
+3. REST call needs go be created when the related link is clicked then this REST call needs to be triggered 
+4. This REST call will send the completed update set as a xml file to TEST environment and that xml file will get inserted into Retrieved update set for this process also we have REST api call to insert the xml in to the Retrived update set table
+5. Here two REST call needs to created one is POST from the developer environment and another is get the xml record and PUT in to the Retrieved update set table, and let me know what else for these process needed
+6. Once the call is happened or completed then in the Development instance update set page itself it should create a pop up and says that update set name is been inserted in to the TEST environment
+
+Note: These needs to be done with the help of flow designer 
+
+How to achieve this POC give me the full process and by each step with the clear explanation in servicenow 
